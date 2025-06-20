@@ -2,12 +2,13 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:intl/intl.dart';
-import 'package:rental_management_app/main.dart';
 import 'package:rental_management_app/models/tenant_model.dart';
 import 'package:rental_management_app/screens/add_tenant_screen.dart';
 import 'package:rental_management_app/screens/analytics_screen.dart';
 import 'package:rental_management_app/screens/payment_screen.dart';
 import 'package:rental_management_app/services/database_service.dart';
+import 'package:timezone/data/latest.dart' as tz;
+import 'package:timezone/timezone.dart' as tz;
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({Key? key}) : super(key: key);
@@ -25,19 +26,68 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _hasMore = true;
   bool _notificationsSent = false;
   final NumberFormat _currencyFormat = NumberFormat('#,##0', 'en_US');
+  final FlutterLocalNotificationsPlugin _flutterLocalNotificationsPlugin =
+      FlutterLocalNotificationsPlugin();
 
   @override
   void initState() {
     super.initState();
     _scrollController.addListener(() {
-      if (_scrollController.position.pixels == _scrollController.position.maxScrollExtent &&
+      if (_scrollController.position.pixels ==
+              _scrollController.position.maxScrollExtent &&
           !_isLoadingMore &&
           _hasMore) {
         _loadMoreTenants();
       }
     });
+    _initializeNotifications();
+    _scheduleDailyCheck();
   }
 
+  // Initialize notification plugin
+  Future<void> _initializeNotifications() async {
+    const AndroidInitializationSettings initializationSettingsAndroid =
+        AndroidInitializationSettings('app_icon');
+    final InitializationSettings initializationSettings =
+        InitializationSettings(android: initializationSettingsAndroid);
+    await _flutterLocalNotificationsPlugin.initialize(initializationSettings);
+    tz.initializeTimeZones(); // Initialize timezone data
+  }
+
+  // Schedule daily check at 9 AM EAT
+  Future<void> _scheduleDailyCheck() async {
+    final location = tz.getLocation('Africa/Nairobi'); // EAT timezone
+    final now = tz.TZDateTime.now(location);
+    final scheduledDate = tz.TZDateTime(
+      location,
+      now.year,
+      now.month,
+      now.day,
+      9,
+    ).add(const Duration(days: 1)); // Next 9 AM
+
+    await _flutterLocalNotificationsPlugin.zonedSchedule(
+      0,
+      'Payment Reminder',
+      'Check for unpaid tenants for this month.',
+      scheduledDate,
+      const NotificationDetails(
+        android: AndroidNotificationDetails(
+          'payment_channel',
+          'Payment Reminders',
+          importance: Importance.high,
+          priority: Priority.high,
+        ),
+      ),
+      androidAllowWhileIdle: true,
+      uiLocalNotificationDateInterpretation:
+          UILocalNotificationDateInterpretation.absoluteTime,
+      matchDateTimeComponents: DateTimeComponents.time,
+      payload: 'payment_reminder',
+    );
+  }
+
+  // Load tenants and check for unpaid status
   Future<void> _loadMoreTenants() async {
     if (!_hasMore || _isLoadingMore) return;
 
@@ -60,7 +110,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
       if (!_notificationsSent) {
         _checkForOverduePayments(newTenants);
-        _notificationsSent = true;
+        _notificationsSent = true; // Ensure this runs only once per session
       }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -82,77 +132,94 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  void _checkForOverduePayments(List<Tenant> tenants) async {
-    final currentMonthYear = DateFormat('yyyy-MM').format(DateTime.now());
-    for (var tenant in tenants) {
-      final balance = await _dbService.getRentBalance(tenant.id!, currentMonthYear);
-      if (balance > 0) {
-        const AndroidNotificationDetails androidPlatformChannelSpecifics =
-            AndroidNotificationDetails(
-          'overdue_channel',
-          'Overdue Payments',
-          importance: Importance.max,
-          priority: Priority.high,
-        );
-        const NotificationDetails platformChannelSpecifics = NotificationDetails(
-          android: androidPlatformChannelSpecifics,
-        );
+  // Check for unpaid tenants and send notifications
+  Future<void> _checkForOverduePayments(List<Tenant> tenants) async {
+    final now = DateTime.now();
+    final currentMonth = DateTime(
+      now.year,
+      now.month,
+    ); // Current month (e.g., June 2025)
 
-        await flutterLocalNotificationsPlugin.show(
-          tenant.id.hashCode,
-          'Overdue Payment',
-          '${tenant.name} has an overdue balance of ${_currencyFormat.format(balance)} UGX for $currentMonthYear',
-          platformChannelSpecifics,
-        );
+    for (var tenant in tenants) {
+      final payments = await _dbService.getPaymentsByTenant(tenant.id!);
+      bool paidThisMonth = payments.any((payment) {
+        final paymentDate =
+            payment.createdAt.toDate(); // Convert Timestamp to DateTime
+        return paymentDate.year == currentMonth.year &&
+            paymentDate.month == currentMonth.month;
+      });
+
+      if (!paidThisMonth) {
+        await _showNotification(tenant.name, currentMonth);
       }
     }
+  }
+
+  // Show notification for unpaid tenant
+  Future<void> _showNotification(
+    String tenantName,
+    DateTime currentMonth,
+  ) async {
+    const AndroidNotificationDetails androidPlatformChannelSpecifics =
+        AndroidNotificationDetails(
+          'payment_channel',
+          'Payment Reminders',
+          importance: Importance.high,
+          priority: Priority.high,
+          showWhen: false,
+        );
+    const NotificationDetails platformChannelSpecifics = NotificationDetails(
+      android: androidPlatformChannelSpecifics,
+    );
+    await _flutterLocalNotificationsPlugin.show(
+      tenantName.hashCode, // Unique ID based on tenant name
+      'Unpaid Rent Alert',
+      '$tenantName has not paid for ${DateFormat('MMMM yyyy').format(currentMonth)}',
+      platformChannelSpecifics,
+      payload: 'unpaid_reminder_$tenantName',
+    );
   }
 
   Future<void> _deleteTenant(String tenantId) async {
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16.0),
-        ),
-        title: const Text(
-          'Delete Tenant?',
-          style: TextStyle(
-            fontFamily: 'Poppins',
-            fontWeight: FontWeight.bold,
-            color: Color.fromARGB(255, 96, 156, 209),
-          ),
-        ),
-        content: const Text(
-          'This action will also delete all associated payments and cannot be undone.',
-          style: TextStyle(
-            fontFamily: 'Poppins',
-            fontSize: 16,
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text(
-              'Cancel',
+      builder:
+          (context) => AlertDialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16.0),
+            ),
+            title: const Text(
+              'Delete Tenant?',
               style: TextStyle(
                 fontFamily: 'Poppins',
-                color: Color(0xFFFFCA28),
+                fontWeight: FontWeight.bold,
+                color: Color.fromARGB(255, 96, 156, 209),
               ),
             ),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text(
-              'Delete',
-              style: TextStyle(
-                fontFamily: 'Poppins',
-                color: Colors.red,
-              ),
+            content: const Text(
+              'This action will also delete all associated payments and cannot be undone.',
+              style: TextStyle(fontFamily: 'Poppins', fontSize: 16),
             ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text(
+                  'Cancel',
+                  style: TextStyle(
+                    fontFamily: 'Poppins',
+                    color: Color(0xFFFFCA28),
+                  ),
+                ),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text(
+                  'Delete',
+                  style: TextStyle(fontFamily: 'Poppins', color: Colors.red),
+                ),
+              ),
+            ],
           ),
-        ],
-      ),
     );
 
     if (confirmed == true) {
@@ -161,10 +228,7 @@ class _HomeScreenState extends State<HomeScreen> {
         SnackBar(
           content: const Text(
             'Tenant deleted successfully',
-            style: TextStyle(
-              color: Colors.white,
-              fontFamily: 'Poppins',
-            ),
+            style: TextStyle(color: Colors.white, fontFamily: 'Poppins'),
           ),
           backgroundColor: const Color(0xFF1E88E5),
           duration: const Duration(seconds: 2),
@@ -193,6 +257,13 @@ class _HomeScreenState extends State<HomeScreen> {
         backgroundColor: primaryBlue,
         elevation: 0,
         centerTitle: true,
+        leading: Builder(
+          builder:
+              (context) => IconButton(
+                icon: const Icon(Icons.menu, color: Colors.white),
+                onPressed: () => Scaffold.of(context).openDrawer(),
+              ),
+        ),
         actions: [
           _buildIconButton(
             icon: Icons.analytics,
@@ -207,16 +278,104 @@ class _HomeScreenState extends State<HomeScreen> {
           const SizedBox(width: 16),
         ],
       ),
+      drawer: Drawer(
+        backgroundColor: Colors.white.withOpacity(0.95), // Light background
+        child: ListView(
+          padding: EdgeInsets.zero,
+          children: [
+            DrawerHeader(
+              decoration: const BoxDecoration(color: primaryBlue),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Menu',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                      fontFamily: 'Poppins',
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Navigate your app',
+                    style: TextStyle(
+                      color: Colors.white.withOpacity(0.7),
+                      fontSize: 14,
+                      fontFamily: 'Poppins',
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            ListTile(
+              leading: const Icon(Icons.home, color: primaryBlue),
+              title: const Text(
+                'Home',
+                style: TextStyle(fontFamily: 'Poppins'),
+              ),
+              onTap: () {
+                Navigator.pop(context); // Close drawer
+                // Already on HomeScreen, no navigation needed
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.person_add, color: primaryBlue),
+              title: const Text(
+                'Add Tenant',
+                style: TextStyle(fontFamily: 'Poppins'),
+              ),
+              onTap: () {
+                Navigator.pop(context); // Close drawer
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => AddTenantScreen()),
+                );
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.payment, color: primaryBlue),
+              title: const Text(
+                'Payment',
+                style: TextStyle(fontFamily: 'Poppins'),
+              ),
+              onTap: () {
+                Navigator.pop(context); // Close drawer
+                // Assuming a tenant is selected or a list is needed; adjust as per your app
+                if (_tenants.isNotEmpty) {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => PaymentScreen(tenant: _tenants[0]),
+                    ),
+                  );
+                }
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.analytics, color: primaryBlue),
+              title: const Text(
+                'Analytics',
+                style: TextStyle(fontFamily: 'Poppins'),
+              ),
+              onTap: () {
+                Navigator.pop(context); // Close drawer
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => AnalyticsScreen()),
+                );
+              },
+            ),
+          ],
+        ),
+      ),
       body: Container(
         decoration: const BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            colors: [
-              primaryBlue,
-              Colors.white,
-              accentYellow,
-            ],
+            colors: [primaryBlue, Colors.white, accentYellow],
             stops: [0.0, 0.5, 1.0],
           ),
         ),
@@ -235,7 +394,8 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               );
             }
-            if (snapshot.connectionState == ConnectionState.waiting && _tenants.isEmpty) {
+            if (snapshot.connectionState == ConnectionState.waiting &&
+                _tenants.isEmpty) {
               return Center(
                 child: CircularProgressIndicator(
                   valueColor: AlwaysStoppedAnimation<Color>(primaryBlue),
@@ -249,10 +409,15 @@ class _HomeScreenState extends State<HomeScreen> {
 
             return FutureBuilder<List<double>>(
               future: Future.wait(
-                _tenants.map((tenant) => _dbService.getRentBalance(tenant.id!, currentMonthYear)),
+                _tenants.map(
+                  (tenant) =>
+                      _dbService.getRentBalance(tenant.id!, currentMonthYear),
+                ),
               ),
               builder: (context, balanceSnapshot) {
-                if (balanceSnapshot.connectionState == ConnectionState.waiting && _tenants.isEmpty) {
+                if (balanceSnapshot.connectionState ==
+                        ConnectionState.waiting &&
+                    _tenants.isEmpty) {
                   return Center(
                     child: CircularProgressIndicator(
                       valueColor: AlwaysStoppedAnimation<Color>(primaryBlue),
@@ -260,14 +425,24 @@ class _HomeScreenState extends State<HomeScreen> {
                   );
                 }
 
-                final balances = balanceSnapshot.data ?? List.filled(_tenants.length, 0.0);
-                final totalRent = _tenants.fold(0.0, (sum, tenant) => sum + tenant.rentThreshold);
-                final totalOverdue = balances.fold(0.0, (sum, balance) => sum + (balance > 0 ? balance : 0));
+                final balances =
+                    balanceSnapshot.data ?? List.filled(_tenants.length, 0.0);
+                final totalRent = _tenants.fold(
+                  0.0,
+                  (sum, tenant) => sum + tenant.rentThreshold,
+                );
+                final totalOverdue = balances.fold(
+                  0.0,
+                  (sum, balance) => sum + (balance > 0 ? balance : 0),
+                );
 
                 return Column(
                   children: [
                     Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 24.0),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16.0,
+                        vertical: 24.0,
+                      ),
                       child: Card(
                         elevation: 8.0,
                         shape: RoundedRectangleBorder(
@@ -362,196 +537,244 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                     ),
                     Expanded(
-                      child: _tenants.isEmpty
-                          ? Center(
-                              child: Text(
-                                'No tenants found',
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  color: Colors.grey[600],
-                                  fontFamily: 'Poppins',
-                                ),
-                              ),
-                            )
-                          : ListView.builder(
-                              controller: _scrollController,
-                              padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
-                              itemCount: _tenants.length + (_hasMore ? 1 : 0),
-                              itemBuilder: (context, index) {
-                                if (index == _tenants.length) {
-                                  _loadMoreTenants();
-                                  return Center(
-                                    child: CircularProgressIndicator(
-                                      valueColor: AlwaysStoppedAnimation<Color>(primaryBlue),
-                                    ),
-                                  );
-                                }
-                                final tenant = _tenants[index];
-                                final balance = index < balances.length ? balances[index] : 0.0;
-                                return Card(
-                                  elevation: 4.0,
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(12.0),
+                      child:
+                          _tenants.isEmpty
+                              ? Center(
+                                child: Text(
+                                  'No tenants found',
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    color: Colors.grey[600],
+                                    fontFamily: 'Poppins',
                                   ),
-                                  margin: const EdgeInsets.symmetric(vertical: 8.0),
-                                  child: Container(
-                                    decoration: BoxDecoration(
+                                ),
+                              )
+                              : ListView.builder(
+                                controller: _scrollController,
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 16.0,
+                                  vertical: 12.0,
+                                ),
+                                itemCount: _tenants.length + (_hasMore ? 1 : 0),
+                                itemBuilder: (context, index) {
+                                  if (index == _tenants.length) {
+                                    _loadMoreTenants();
+                                    return Center(
+                                      child: CircularProgressIndicator(
+                                        valueColor:
+                                            AlwaysStoppedAnimation<Color>(
+                                              primaryBlue,
+                                            ),
+                                      ),
+                                    );
+                                  }
+                                  final tenant = _tenants[index];
+                                  final balance =
+                                      index < balances.length
+                                          ? balances[index]
+                                          : 0.0;
+                                  return Card(
+                                    elevation: 4.0,
+                                    shape: RoundedRectangleBorder(
                                       borderRadius: BorderRadius.circular(12.0),
-                                      gradient: LinearGradient(
-                                        colors: [
-                                          Colors.grey[100]!,
-                                          Colors.white,
-                                        ],
-                                        begin: Alignment.topLeft,
-                                        end: Alignment.bottomRight,
-                                      ),
                                     ),
-                                    child: ListTile(
-                                      contentPadding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-                                      leading: Icon(
-                                        Icons.person,
-                                        color: primaryBlue,
-                                        size: 28,
-                                      ),
-                                      title: Text(
-                                        tenant.name,
-                                        style: const TextStyle(
-                                          fontSize: 16,
-                                          fontWeight: FontWeight.w600,
-                                          fontFamily: 'Poppins',
+                                    margin: const EdgeInsets.symmetric(
+                                      vertical: 8.0,
+                                    ),
+                                    child: Container(
+                                      decoration: BoxDecoration(
+                                        borderRadius: BorderRadius.circular(
+                                          12.0,
                                         ),
-                                      ),
-                                      subtitle: Padding(
-                                        padding: const EdgeInsets.only(top: 4.0),
-                                        child: Row(
-                                          children: [
-                                            Icon(
-                                              Icons.home,
-                                              color: Colors.grey[600],
-                                              size: 16,
-                                            ),
-                                            const SizedBox(width: 8),
-                                            Text(
-                                              'House: ${tenant.houseNumber}',
-                                              style: TextStyle(
-                                                fontSize: 14,
-                                                color: Colors.grey[600],
-                                                fontFamily: 'Poppins',
-                                              ),
-                                            ),
+                                        gradient: LinearGradient(
+                                          colors: [
+                                            Colors.grey[100]!,
+                                            Colors.white,
                                           ],
+                                          begin: Alignment.topLeft,
+                                          end: Alignment.bottomRight,
                                         ),
                                       ),
-                                      trailing: Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          Column(
-                                            mainAxisAlignment: MainAxisAlignment.center,
-                                            crossAxisAlignment: CrossAxisAlignment.end,
+                                      child: ListTile(
+                                        contentPadding:
+                                            const EdgeInsets.symmetric(
+                                              horizontal: 16.0,
+                                              vertical: 8.0,
+                                            ),
+                                        leading: Icon(
+                                          Icons.person,
+                                          color: primaryBlue,
+                                          size: 28,
+                                        ),
+                                        title: Text(
+                                          tenant.name,
+                                          style: const TextStyle(
+                                            fontSize: 16,
+                                            fontWeight: FontWeight.w600,
+                                            fontFamily: 'Poppins',
+                                          ),
+                                        ),
+                                        subtitle: Padding(
+                                          padding: const EdgeInsets.only(
+                                            top: 4.0,
+                                          ),
+                                          child: Row(
                                             children: [
+                                              Icon(
+                                                Icons.home,
+                                                color: Colors.grey[600],
+                                                size: 16,
+                                              ),
+                                              const SizedBox(width: 8),
                                               Text(
-                                                '${_currencyFormat.format(tenant.rentThreshold)} UGX',
-                                                style: const TextStyle(
+                                                'House: ${tenant.houseNumber}',
+                                                style: TextStyle(
                                                   fontSize: 14,
-                                                  fontWeight: FontWeight.w600,
+                                                  color: Colors.grey[600],
                                                   fontFamily: 'Poppins',
                                                 ),
                                               ),
-                                              if (balance > 0)
-                                                Container(
-                                                  padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 2.0),
-                                                  margin: const EdgeInsets.only(top: 4.0),
-                                                  decoration: BoxDecoration(
-                                                    color: accentYellow.withOpacity(0.2),
-                                                    borderRadius: BorderRadius.circular(8.0),
-                                                  ),
-                                                  child: Text(
-                                                    'Due: ${_currencyFormat.format(balance)} UGX',
-                                                    style: TextStyle(
-                                                      color: accentYellow,
-                                                      fontSize: 12,
-                                                      fontFamily: 'Poppins',
-                                                    ),
-                                                  ),
-                                                ),
                                             ],
                                           ),
-                                          const SizedBox(width: 8),
-                                          PopupMenuButton<String>(
-                                            icon: Icon(
-                                              Icons.more_vert,
-                                              color: Colors.grey[600],
+                                        ),
+                                        trailing: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Column(
+                                              mainAxisAlignment:
+                                                  MainAxisAlignment.center,
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.end,
+                                              children: [
+                                                Text(
+                                                  '${_currencyFormat.format(tenant.rentThreshold)} UGX',
+                                                  style: const TextStyle(
+                                                    fontSize: 14,
+                                                    fontWeight: FontWeight.w600,
+                                                    fontFamily: 'Poppins',
+                                                  ),
+                                                ),
+                                                if (balance > 0)
+                                                  Container(
+                                                    padding:
+                                                        const EdgeInsets.symmetric(
+                                                          horizontal: 8.0,
+                                                          vertical: 2.0,
+                                                        ),
+                                                    margin:
+                                                        const EdgeInsets.only(
+                                                          top: 4.0,
+                                                        ),
+                                                    decoration: BoxDecoration(
+                                                      color: accentYellow
+                                                          .withOpacity(0.2),
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                            8.0,
+                                                          ),
+                                                    ),
+                                                    child: Text(
+                                                      'Due: ${_currencyFormat.format(balance)} UGX',
+                                                      style: TextStyle(
+                                                        color: accentYellow,
+                                                        fontSize: 12,
+                                                        fontFamily: 'Poppins',
+                                                      ),
+                                                    ),
+                                                  ),
+                                              ],
                                             ),
-                                            onSelected: (value) {
-                                              if (value == 'edit') {
-                                                Navigator.push(
-                                                  context,
-                                                  MaterialPageRoute(
-                                                    builder: (context) => AddTenantScreen(tenant: tenant),
+                                            const SizedBox(width: 8),
+                                            PopupMenuButton<String>(
+                                              icon: Icon(
+                                                Icons.more_vert,
+                                                color: Colors.grey[600],
+                                              ),
+                                              onSelected: (value) {
+                                                if (value == 'edit') {
+                                                  Navigator.push(
+                                                    context,
+                                                    MaterialPageRoute(
+                                                      builder:
+                                                          (context) =>
+                                                              AddTenantScreen(
+                                                                tenant: tenant,
+                                                              ),
+                                                    ),
+                                                  );
+                                                } else if (value == 'delete') {
+                                                  _deleteTenant(tenant.id!);
+                                                }
+                                              },
+                                              itemBuilder:
+                                                  (context) => [
+                                                    PopupMenuItem(
+                                                      value: 'edit',
+                                                      child: Row(
+                                                        children: [
+                                                          Icon(
+                                                            Icons.edit,
+                                                            color: primaryBlue,
+                                                            size: 20,
+                                                          ),
+                                                          const SizedBox(
+                                                            width: 8,
+                                                          ),
+                                                          Text(
+                                                            'Edit',
+                                                            style: TextStyle(
+                                                              fontFamily:
+                                                                  'Poppins',
+                                                              color:
+                                                                  primaryBlue,
+                                                            ),
+                                                          ),
+                                                        ],
+                                                      ),
+                                                    ),
+                                                    PopupMenuItem(
+                                                      value: 'delete',
+                                                      child: Row(
+                                                        children: [
+                                                          const Icon(
+                                                            Icons.delete,
+                                                            color: Colors.red,
+                                                            size: 20,
+                                                          ),
+                                                          const SizedBox(
+                                                            width: 8,
+                                                          ),
+                                                          Text(
+                                                            'Delete',
+                                                            style: TextStyle(
+                                                              fontFamily:
+                                                                  'Poppins',
+                                                              color: Colors.red,
+                                                            ),
+                                                          ),
+                                                        ],
+                                                      ),
+                                                    ),
+                                                  ],
+                                            ),
+                                          ],
+                                        ),
+                                        onTap: () {
+                                          Navigator.push(
+                                            context,
+                                            MaterialPageRoute(
+                                              builder:
+                                                  (context) => PaymentScreen(
+                                                    tenant: tenant,
                                                   ),
-                                                );
-                                              } else if (value == 'delete') {
-                                                _deleteTenant(tenant.id!);
-                                              }
-                                            },
-                                            itemBuilder: (context) => [
-                                              PopupMenuItem(
-                                                value: 'edit',
-                                                child: Row(
-                                                  children: [
-                                                    Icon(
-                                                      Icons.edit,
-                                                      color: primaryBlue,
-                                                      size: 20,
-                                                    ),
-                                                    const SizedBox(width: 8),
-                                                    Text(
-                                                      'Edit',
-                                                      style: TextStyle(
-                                                        fontFamily: 'Poppins',
-                                                        color: primaryBlue,
-                                                      ),
-                                                    ),
-                                                  ],
-                                                ),
-                                              ),
-                                              PopupMenuItem(
-                                                value: 'delete',
-                                                child: Row(
-                                                  children: [
-                                                    const Icon(
-                                                      Icons.delete,
-                                                      color: Colors.red,
-                                                      size: 20,
-                                                    ),
-                                                    const SizedBox(width: 8),
-                                                    Text(
-                                                      'Delete',
-                                                      style: TextStyle(
-                                                        fontFamily: 'Poppins',
-                                                        color: Colors.red,
-                                                      ),
-                                                    ),
-                                                  ],
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        ],
+                                            ),
+                                          );
+                                        },
                                       ),
-                                      onTap: () {
-                                        Navigator.push(
-                                          context,
-                                          MaterialPageRoute(
-                                            builder: (context) => PaymentScreen(tenant: tenant),
-                                          ),
-                                        );
-                                      },
                                     ),
-                                  ),
-                                );
-                              },
-                            ),
+                                  );
+                                },
+                              ),
                     ),
                   ],
                 );
@@ -568,10 +791,7 @@ class _HomeScreenState extends State<HomeScreen> {
           );
         },
         backgroundColor: primaryBlue,
-        child: const Icon(
-          Icons.add,
-          color: Colors.white,
-        ),
+        child: const Icon(Icons.add, color: Colors.white),
         elevation: 8.0,
       ),
     );
@@ -602,14 +822,14 @@ class _HomeScreenState extends State<HomeScreen> {
               shape: BoxShape.circle,
               color: Colors.white.withOpacity(0.2),
             ),
-            child: Icon(
-              icon,
-              color: Colors.white,
-              size: 28,
-            ),
+            child: Icon(icon, color: Colors.white, size: 28),
           ),
         ),
       ),
     );
   }
+}
+
+extension on DatabaseService {
+  getPaymentsByTenant(String s) {}
 }
