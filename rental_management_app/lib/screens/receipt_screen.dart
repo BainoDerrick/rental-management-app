@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:rental_management_app/models/payment_model.dart';
 import 'package:rental_management_app/models/tenant_model.dart';
 import 'package:rental_management_app/screens/home_screen.dart';
@@ -20,12 +21,38 @@ class ReceiptScreen extends StatelessWidget {
     if (number == 0) return 'Zero';
 
     const List<String> units = [
-      '', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine',
-      'ten', 'eleven', 'twelve', 'thirteen', 'fourteen', 'fifteen', 'sixteen',
-      'seventeen', 'eighteen', 'nineteen'
+      '',
+      'one',
+      'two',
+      'three',
+      'four',
+      'five',
+      'six',
+      'seven',
+      'eight',
+      'nine',
+      'ten',
+      'eleven',
+      'twelve',
+      'thirteen',
+      'fourteen',
+      'fifteen',
+      'sixteen',
+      'seventeen',
+      'eighteen',
+      'nineteen',
     ];
     const List<String> tens = [
-      '', '', 'twenty', 'thirty', 'forty', 'fifty', 'sixty', 'seventy', 'eighty', 'ninety'
+      '',
+      '',
+      'twenty',
+      'thirty',
+      'forty',
+      'fifty',
+      'sixty',
+      'seventy',
+      'eighty',
+      'ninety',
     ];
     const List<String> thousands = ['', 'thousand', 'million', 'billion'];
 
@@ -36,12 +63,12 @@ class ReceiptScreen extends StatelessWidget {
       int threeDigits = number % 1000;
       if (threeDigits > 0) {
         List<String> threeDigitWords = [];
-        
+
         if (threeDigits >= 100) {
           threeDigitWords.add('${units[threeDigits ~/ 100]} hundred');
           threeDigits %= 100;
         }
-        
+
         if (threeDigits > 0) {
           if (threeDigits < 20) {
             threeDigitWords.add(units[threeDigits]);
@@ -52,7 +79,7 @@ class ReceiptScreen extends StatelessWidget {
             }
           }
         }
-        
+
         if (thousandCounter > 0) {
           threeDigitWords.add(thousands[thousandCounter]);
         }
@@ -69,12 +96,26 @@ class ReceiptScreen extends StatelessWidget {
     return words.join(' ') + ' UGX';
   }
 
+  // Function to get or generate the next receipt number
+  Future<int> _getNextReceiptNumber() async {
+    final prefs = await SharedPreferences.getInstance();
+    int lastReceiptNumber =
+        prefs.getInt('last_receipt_number') ??
+        999; // Start from 999 to make the first 1000
+    int nextReceiptNumber = lastReceiptNumber + 1;
+    await prefs.setInt('last_receipt_number', nextReceiptNumber);
+    return nextReceiptNumber;
+  }
+
   // Function to generate PDF
   Future<void> _downloadReceiptAsPdf(BuildContext context) async {
     final pdf = pw.Document();
     final robotoFont = await PdfGoogleFonts.robotoRegular();
     final totalPaid = (payment.rentPaid + payment.waterBillPaid).toInt();
     final amountInWords = _numberToWords(totalPaid);
+    final currentDate =
+        DateTime.now(); // Today's date for the PDF (02:06 PM EAT, 19 Jun 2025)
+    final receiptNumber = await _getNextReceiptNumber();
 
     pdf.addPage(
       pw.Page(
@@ -97,12 +138,8 @@ class ReceiptScreen extends StatelessWidget {
                         ),
                       ),
                       pw.Text(
-                        'Tel: +256 123 456 789',
-                        style: pw.TextStyle(
-                          fontSize: 12,
-                          color: PdfColors.blue,
-                          font: robotoFont,
-                        ),
+                        'LOCATED SSEGUKU ALONG ENTEBBE ROAD TEL: 0782373727',
+                        style: pw.TextStyle(fontSize: 10, font: robotoFont),
                       ),
                     ],
                   ),
@@ -111,55 +148,25 @@ class ReceiptScreen extends StatelessWidget {
                     style: pw.TextStyle(
                       fontSize: 16,
                       fontWeight: pw.FontWeight.bold,
-                      color: PdfColors.blue,
                       font: robotoFont,
                     ),
                   ),
                 ],
               ),
-              pw.SizedBox(height: 16),
-              pw.Divider(),
-              _buildPdfDottedLineText('Received with thanks from', tenant.name, robotoFont),
-              pw.SizedBox(height: 8),
-              _buildPdfDottedLineText('Amount in words', amountInWords, robotoFont),
-              pw.SizedBox(height: 8),
-              _buildPdfDottedLineText('Figures', '${_currencyFormat.format(totalPaid)} UGX', robotoFont),
-              pw.SizedBox(height: 8),
-              pw.Row(
-                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                crossAxisAlignment: pw.CrossAxisAlignment.start,
-                children: [
-                  pw.Expanded(
-                    child: _buildPdfDottedLineText(
-                      'Being payment of',
-                      'Rent: ${_currencyFormat.format(payment.rentPaid)} UGX\nWater: ${_currencyFormat.format(payment.waterBillPaid)} UGX',
-                      robotoFont,
-                    ),
-                  ),
-                  pw.SizedBox(width: 16),
-                  pw.Expanded(
-                    child: pw.Column(
-                      children: [
-                        _buildPdfDottedLineText('House Name', 'BSB Residential', robotoFont),
-                        pw.SizedBox(height: 8),
-                        _buildPdfDottedLineText('House No', tenant.houseNumber, robotoFont),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-              pw.SizedBox(height: 16),
+              pw.SizedBox(height: 10),
               pw.Row(
                 mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                 children: [
-                  pw.Expanded(
-                    child: _buildPdfDottedLineText('Payment by', 'Cash', robotoFont),
-                  ),
-                  pw.Expanded(
-                    child: _buildPdfDottedLineText('Date', _dateFormat.format(payment.createdAt), robotoFont),
+                  pw.Text(
+                    'NO.',
+                    style: pw.TextStyle(
+                      fontSize: 12,
+                      fontWeight: pw.FontWeight.bold,
+                      font: robotoFont,
+                    ),
                   ),
                   pw.Text(
-                    'UGX',
+                    'DATE',
                     style: pw.TextStyle(
                       fontSize: 12,
                       fontWeight: pw.FontWeight.bold,
@@ -168,17 +175,65 @@ class ReceiptScreen extends StatelessWidget {
                   ),
                 ],
               ),
-              pw.SizedBox(height: 16),
-              pw.Divider(),
-              pw.Center(
-                child: pw.Text(
-                  'Together we rise, together we thrive, tenants our family.',
-                  style: pw.TextStyle(
-                    fontSize: 10,
-                    fontStyle: pw.FontStyle.italic,
-                    color: PdfColors.grey,
-                    font: robotoFont,
+              pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                children: [
+                  pw.Expanded(
+                    child: pw.Text(
+                      receiptNumber.toString(),
+                      style: pw.TextStyle(fontSize: 12, font: robotoFont),
+                    ),
                   ),
+                  pw.Expanded(
+                    child: pw.Text(
+                      _dateFormat.format(currentDate),
+                      style: pw.TextStyle(fontSize: 12, font: robotoFont),
+                    ),
+                  ),
+                ],
+              ),
+              pw.SizedBox(height: 10),
+              pw.Divider(),
+              _buildPdfDottedLineText(
+                'Received with thanks from',
+                tenant.name,
+                robotoFont,
+              ),
+              pw.SizedBox(height: 8),
+              _buildPdfDottedLineText(
+                'The sum of shillings',
+                amountInWords,
+                robotoFont,
+              ),
+              pw.SizedBox(height: 8),
+              _buildPdfDottedLineText(
+                'Being payment of',
+                'Rent: ${_currencyFormat.format(payment.rentPaid)} UGX\nWater: ${_currencyFormat.format(payment.waterBillPaid)} UGX',
+                robotoFont,
+              ),
+              pw.SizedBox(height: 8),
+              _buildPdfDottedLineText(
+                'Amount in figures Shs.',
+                '${_currencyFormat.format(totalPaid)} UGX',
+                robotoFont,
+              ),
+              pw.SizedBox(height: 8),
+              _buildPdfDottedLineText('Cash/Cheque No.', 'Cash', robotoFont),
+              pw.SizedBox(height: 8),
+              _buildPdfDottedLineText(
+                'House No',
+                tenant.houseNumber,
+                robotoFont,
+              ),
+              pw.SizedBox(height: 20),
+              pw.Divider(),
+              pw.SizedBox(height: 10),
+              pw.Text(
+                'Your home, our haven, where memories are made',
+                style: pw.TextStyle(
+                  fontSize: 12,
+                  fontWeight: pw.FontWeight.bold,
+                  font: robotoFont,
                 ),
               ),
             ],
@@ -189,11 +244,12 @@ class ReceiptScreen extends StatelessWidget {
 
     await Printing.sharePdf(
       bytes: await pdf.save(),
-      filename: 'Receipt_${tenant.name}_${_dateFormat.format(payment.createdAt)}.pdf',
+      filename:
+          'Receipt_${tenant.name}_${receiptNumber}_${_dateFormat.format(currentDate)}.pdf',
     );
   }
 
-  // Helper method for PDF dotted line text
+  // Helper method for PDF dotted line text with bold labels
   pw.Widget _buildPdfDottedLineText(String label, String value, pw.Font font) {
     return pw.Column(
       crossAxisAlignment: pw.CrossAxisAlignment.start,
@@ -202,7 +258,7 @@ class ReceiptScreen extends StatelessWidget {
           label,
           style: pw.TextStyle(
             fontSize: 12,
-            fontWeight: pw.FontWeight.bold,
+            fontWeight: pw.FontWeight.bold, // Bold styling for specified labels
             color: PdfColors.black,
             font: font,
           ),
@@ -241,75 +297,73 @@ class ReceiptScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final totalPaid = (payment.rentPaid + payment.waterBillPaid).toInt();
     final amountInWords = _numberToWords(totalPaid);
+    final currentDate =
+        DateTime.now(); // Today's date for the UI (02:06 PM EAT, 19 Jun 2025)
 
     // Define theme colors
-    const primaryBlue = Color(0xFF1E88E5); // A modern blue
-    const accentYellow = Color(0xFFFFCA28); // A vibrant yellow
+    const primaryBlue = Color(0xFF1E88E5);
+    const accentYellow = Color(0xFFFFCA28);
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text(
-          'Payment Receipt',
-          style: TextStyle(
-            fontSize: 22,
-            fontWeight: FontWeight.bold,
-            color: Colors.white,
-            fontFamily: 'Poppins',
+    return FutureBuilder<int>(
+      future: _getNextReceiptNumber(),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        final receiptNumber = snapshot.data!;
+
+        return Scaffold(
+          appBar: AppBar(
+            title: const Text(
+              'Payment Receipt',
+              style: TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
+                fontFamily: 'Poppins',
+              ),
+            ),
+            backgroundColor: primaryBlue,
+            elevation: 0,
+            centerTitle: true,
           ),
-        ),
-        backgroundColor: primaryBlue,
-        elevation: 0,
-        centerTitle: true,
-      ),
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [
-              primaryBlue,
-              Colors.white,
-              accentYellow,
-            ],
-            stops: [0.0, 0.5, 1.0],
-          ),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 24.0),
-          child: SingleChildScrollView(
-            scrollDirection: Axis.vertical,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                // Receipt content wrapped in a Card for a modern look
-                Card(
-                  elevation: 8.0,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16.0),
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.all(20.0),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: [
-                        // Header Section
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          body: Container(
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [primaryBlue, Colors.white, accentYellow],
+                stops: [0.0, 0.5, 1.0],
+              ),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 16.0,
+                vertical: 24.0,
+              ),
+              child: SingleChildScrollView(
+                scrollDirection: Axis.vertical,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Card(
+                      elevation: 8.0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16.0),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.all(20.0),
+                        child: Column(
                           crossAxisAlignment: CrossAxisAlignment.center,
                           children: [
                             Row(
-                              crossAxisAlignment: CrossAxisAlignment.center,
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                const Icon(
-                                  Icons.home,
-                                  color: primaryBlue,
-                                  size: 40,
-                                ),
-                                const SizedBox(width: 12),
                                 Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    const Text(
+                                    Text(
                                       'BSB AND SONS RESIDENTIALS',
                                       style: TextStyle(
                                         fontSize: 20,
@@ -319,11 +373,69 @@ class ReceiptScreen extends StatelessWidget {
                                       ),
                                     ),
                                     Text(
-                                      'Tel: +256 123 456 789',
+                                      'LOCATED SSEGUKU ALONG ENTEBBE ROAD TEL: 0782373727',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: Colors.black87,
+                                        fontFamily: 'Poppins',
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                Text(
+                                  'RECEIPT',
+                                  style: TextStyle(
+                                    fontSize: 20,
+                                    fontWeight: FontWeight.bold,
+                                    color: primaryBlue,
+                                    fontFamily: 'Poppins',
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 10),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'NO.',
                                       style: TextStyle(
                                         fontSize: 14,
+                                        fontWeight: FontWeight.bold,
                                         color: primaryBlue,
-                                        fontWeight: FontWeight.w500,
+                                        fontFamily: 'Poppins',
+                                      ),
+                                    ),
+                                    Text(
+                                      receiptNumber.toString(),
+                                      style: TextStyle(
+                                        fontSize: 14,
+                                        color: Colors.black87,
+                                        fontFamily: 'Poppins',
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'DATE',
+                                      style: TextStyle(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.bold,
+                                        color: primaryBlue,
+                                        fontFamily: 'Poppins',
+                                      ),
+                                    ),
+                                    Text(
+                                      _dateFormat.format(currentDate),
+                                      style: TextStyle(
+                                        fontSize: 14,
+                                        color: Colors.black87,
                                         fontFamily: 'Poppins',
                                       ),
                                     ),
@@ -331,191 +443,120 @@ class ReceiptScreen extends StatelessWidget {
                                 ),
                               ],
                             ),
-                            Text(
-                              'RECEIPT',
-                              style: TextStyle(
-                                fontSize: 20,
-                                fontWeight: FontWeight.bold,
-                                color: primaryBlue,
-                                fontFamily: 'Poppins',
+                            const SizedBox(height: 10),
+                            Container(
+                              height: 2,
+                              decoration: const BoxDecoration(
+                                gradient: LinearGradient(
+                                  colors: [primaryBlue, accentYellow],
+                                ),
                               ),
                             ),
-                          ],
-                        ),
-                        const SizedBox(height: 20),
-                        // Gradient Divider
-                        Container(
-                          height: 2,
-                          decoration: const BoxDecoration(
-                            gradient: LinearGradient(
-                              colors: [primaryBlue, accentYellow],
+                            const SizedBox(height: 20),
+                            _buildDottedLineText(
+                              'Received with thanks from',
+                              tenant.name,
+                              primaryBlue,
                             ),
-                          ),
-                        ),
-                        const SizedBox(height: 20),
-
-                        // Receipt Details
-                        _buildDottedLineText(
-                          'Received with thanks from',
-                          tenant.name,
-                          primaryBlue,
-                        ),
-                        const SizedBox(height: 16),
-                        _buildDottedLineText(
-                          'Amount in words',
-                          amountInWords,
-                          primaryBlue,
-                        ),
-                        const SizedBox(height: 16),
-                        _buildDottedLineText(
-                          'Figures',
-                          '${_currencyFormat.format(totalPaid)} UGX',
-                          primaryBlue,
-                        ),
-                        const SizedBox(height: 16),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Flexible(
-                              child: _buildDottedLineText(
-                                'Being payment of',
-                                'Rent: ${_currencyFormat.format(payment.rentPaid)} UGX\nWater: ${_currencyFormat.format(payment.waterBillPaid)} UGX',
-                                primaryBlue,
+                            const SizedBox(height: 16),
+                            _buildDottedLineText(
+                              'The sum of shillings',
+                              amountInWords,
+                              primaryBlue,
+                            ),
+                            const SizedBox(height: 16),
+                            _buildDottedLineText(
+                              'Being payment of',
+                              'Rent: ${_currencyFormat.format(payment.rentPaid)} UGX\nWater: ${_currencyFormat.format(payment.waterBillPaid)} UGX',
+                              primaryBlue,
+                            ),
+                            const SizedBox(height: 16),
+                            _buildDottedLineText(
+                              'Amount in figures Shs.',
+                              '${_currencyFormat.format(totalPaid)} UGX',
+                              primaryBlue,
+                            ),
+                            const SizedBox(height: 16),
+                            _buildDottedLineText(
+                              'Cash/Cheque No.',
+                              'Cash',
+                              primaryBlue,
+                            ),
+                            const SizedBox(height: 16),
+                            _buildDottedLineText(
+                              'House No',
+                              tenant.houseNumber,
+                              primaryBlue,
+                            ),
+                            const SizedBox(height: 20),
+                            Container(
+                              height: 2,
+                              decoration: const BoxDecoration(
+                                gradient: LinearGradient(
+                                  colors: [primaryBlue, accentYellow],
+                                ),
                               ),
                             ),
-                            const SizedBox(width: 16),
-                            Flexible(
-                              child: Column(
-                                children: [
-                                  _buildDottedLineText(
-                                    'House Name',
-                                    'BSB Residential',
-                                    primaryBlue,
+                            const SizedBox(height: 20),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.end,
+                              children: [],
+                            ),
+                            const SizedBox(height: 10),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Text(
+                                  'Your home, our haven, where memories are made',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.bold,
+                                    color: primaryBlue,
+                                    fontFamily: 'Poppins',
                                   ),
-                                  const SizedBox(height: 16),
-                                  _buildDottedLineText(
-                                    'House No',
-                                    tenant.houseNumber,
-                                    primaryBlue,
-                                  ),
-                                ],
-                              ),
+                                ),
+                              ],
                             ),
                           ],
                         ),
-                        const SizedBox(height: 20),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Flexible(
-                              child: _buildDottedLineText(
-                                'Payment by',
-                                'Cash',
-                                primaryBlue,
+                      ),
+                    ),
+                    const SizedBox(height: 32),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        _buildAnimatedButton(
+                          context: context,
+                          label: 'Back to Home',
+                          color: accentYellow,
+                          textColor: Colors.black87,
+                          onPressed: () {
+                            Navigator.pushAndRemoveUntil(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => const HomeScreen(),
                               ),
-                            ),
-                            Flexible(
-                              child: _buildDottedLineText(
-                                'Date',
-                                _dateFormat.format(payment.createdAt),
-                                primaryBlue,
-                              ),
-                            ),
-                            Text(
-                              'UGX',
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                                color: primaryBlue,
-                                fontFamily: 'Poppins',
-                              ),
-                            ),
-                          ],
+                              (route) => false,
+                            );
+                          },
                         ),
-                        const SizedBox(height: 20),
-                        Container(
-                          height: 2,
-                          decoration: const BoxDecoration(
-                            gradient: LinearGradient(
-                              colors: [primaryBlue, accentYellow],
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-
-                        // Footer Section
-                        Text(
-                          'Together we rise, together we thrive, tenants our family.',
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontStyle: FontStyle.italic,
-                            color: Colors.grey[700],
-                            fontFamily: 'Poppins',
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                        const SizedBox(height: 8),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              Icons.favorite,
-                              size: 16,
-                              color: accentYellow,
-                            ),
-                            const SizedBox(width: 4),
-                            Text(
-                              'BSB Residences',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: primaryBlue,
-                                fontFamily: 'Poppins',
-                              ),
-                            ),
-                          ],
+                        const SizedBox(width: 20),
+                        _buildAnimatedButton(
+                          context: context,
+                          label: 'Download as PDF',
+                          color: primaryBlue,
+                          textColor: Colors.white,
+                          onPressed: () => _downloadReceiptAsPdf(context),
                         ),
                       ],
                     ),
-                  ),
-                ),
-                const SizedBox(height: 32),
-
-                // Action Buttons
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    // Back to Home Button
-                    _buildAnimatedButton(
-                      context: context,
-                      label: 'Back to Home',
-                      color: accentYellow,
-                      textColor: Colors.black87,
-                      onPressed: () {
-                        Navigator.pushAndRemoveUntil(
-                          context,
-                          MaterialPageRoute(builder: (context) => const HomeScreen()),
-                          (route) => false,
-                        );
-                      },
-                    ),
-                    const SizedBox(width: 20),
-                    // Download as PDF Button
-                    _buildAnimatedButton(
-                      context: context,
-                      label: 'Download as PDF',
-                      color: primaryBlue,
-                      textColor: Colors.white,
-                      onPressed: () => _downloadReceiptAsPdf(context),
-                    ),
                   ],
                 ),
-              ],
+              ),
             ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 
@@ -575,7 +616,7 @@ class ReceiptScreen extends StatelessWidget {
         Text(
           label,
           style: TextStyle(
-            fontSize: 16,
+            fontSize: 14,
             fontWeight: FontWeight.w600,
             color: accentColor,
             fontFamily: 'Poppins',

@@ -66,11 +66,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            colors: [
-              primaryBlue,
-              Colors.white,
-              accentYellow,
-            ],
+            colors: [primaryBlue, Colors.white, accentYellow],
             stops: [0.0, 0.5, 1.0],
           ),
         ),
@@ -126,7 +122,8 @@ class _PaymentScreenState extends State<PaymentScreen> {
                           ),
                           style: const TextStyle(fontFamily: 'Poppins'),
                           validator: (value) {
-                            if (value == null || value.isEmpty) return 'Required';
+                            if (value == null || value.isEmpty)
+                              return 'Required';
                             if (!RegExp(r'^\d{4}-\d{2}$').hasMatch(value)) {
                               return 'Use YYYY-MM format';
                             }
@@ -170,10 +167,15 @@ class _PaymentScreenState extends State<PaymentScreen> {
                           style: const TextStyle(fontFamily: 'Poppins'),
                           keyboardType: TextInputType.text,
                           validator: (value) {
-                            if (value == null || value.isEmpty) return 'Required';
-                            final rawValue = value.replaceAll(RegExp(r'[^0-9.]'), '');
+                            if (value == null || value.isEmpty)
+                              return 'Required';
+                            final rawValue = value.replaceAll(
+                              RegExp(r'[^0-9.]'),
+                              '',
+                            );
                             final amount = double.tryParse(rawValue);
-                            if (amount == null || amount <= 0) return 'Invalid amount';
+                            if (amount == null || amount <= 0)
+                              return 'Invalid amount';
                             return null;
                           },
                         ),
@@ -211,42 +213,54 @@ class _PaymentScreenState extends State<PaymentScreen> {
                           style: const TextStyle(fontFamily: 'Poppins'),
                           keyboardType: TextInputType.text,
                           validator: (value) {
-                            if (value == null || value.isEmpty) return 'Required';
-                            final rawValue = value.replaceAll(RegExp(r'[^0-9.]'), '');
+                            if (value == null || value.isEmpty)
+                              return 'Required';
+                            final rawValue = value.replaceAll(
+                              RegExp(r'[^0-9.]'),
+                              '',
+                            );
                             final amount = double.tryParse(rawValue);
-                            if (amount == null || amount <= 0) return 'Invalid amount';
+                            if (amount == null || amount < 0)
+                              return 'Invalid amount';
                             return null;
                           },
                         ),
                         const SizedBox(height: 24),
                         SizedBox(
                           width: double.infinity,
-                          child: _isSaving
-                              ? Center(
-                                  child: CircularProgressIndicator(
-                                    valueColor: AlwaysStoppedAnimation<Color>(primaryBlue),
-                                  ),
-                                )
-                              : ElevatedButton(
-                                  style: ElevatedButton.styleFrom(
-                                    padding: const EdgeInsets.symmetric(vertical: 16),
-                                    backgroundColor: primaryBlue,
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(12.0),
+                          child:
+                              _isSaving
+                                  ? Center(
+                                    child: CircularProgressIndicator(
+                                      valueColor: AlwaysStoppedAnimation<Color>(
+                                        primaryBlue,
+                                      ),
                                     ),
-                                    elevation: 4.0,
-                                  ),
-                                  onPressed: _recordPayment,
-                                  child: const Text(
-                                    'RECORD PAYMENT',
-                                    style: TextStyle(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.bold,
-                                      color: Colors.white,
-                                      fontFamily: 'Poppins',
+                                  )
+                                  : ElevatedButton(
+                                    style: ElevatedButton.styleFrom(
+                                      padding: const EdgeInsets.symmetric(
+                                        vertical: 16,
+                                      ),
+                                      backgroundColor: primaryBlue,
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(
+                                          12.0,
+                                        ),
+                                      ),
+                                      elevation: 4.0,
+                                    ),
+                                    onPressed: _recordPayment,
+                                    child: const Text(
+                                      'RECORD PAYMENT',
+                                      style: TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.white,
+                                        fontFamily: 'Poppins',
+                                      ),
                                     ),
                                   ),
-                                ),
                         ),
                       ],
                     ),
@@ -272,15 +286,16 @@ class _PaymentScreenState extends State<PaymentScreen> {
               Container(
                 height: 2,
                 decoration: const BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [primaryBlue, accentYellow],
-                  ),
+                  gradient: LinearGradient(colors: [primaryBlue, accentYellow]),
                 ),
               ),
               const SizedBox(height: 12),
               StreamBuilder<(List<Payment>, DocumentSnapshot?)>(
                 key: ValueKey(_monthYearController.text),
-                stream: _dbService.getPaymentsForMonth(widget.tenant.id!, _monthYearController.text),
+                stream: _dbService.getPaymentsForMonth(
+                  widget.tenant.id!,
+                  _monthYearController.text,
+                ),
                 builder: (context, snapshot) {
                   if (snapshot.hasError) {
                     return Text(
@@ -302,16 +317,23 @@ class _PaymentScreenState extends State<PaymentScreen> {
 
                   final payments = snapshot.data?.$1 ?? [];
                   return FutureBuilder<double>(
-                    future: _dbService.getRentBalance(widget.tenant.id!, _monthYearController.text),
+                    future: _dbService.getRentBalance(
+                      widget.tenant.id!,
+                      _monthYearController.text,
+                    ),
                     builder: (context, balanceSnapshot) {
-                      if (balanceSnapshot.connectionState == ConnectionState.waiting) {
+                      if (balanceSnapshot.connectionState ==
+                          ConnectionState.waiting) {
                         return Center(
                           child: CircularProgressIndicator(
-                            valueColor: AlwaysStoppedAnimation<Color>(primaryBlue),
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                              primaryBlue,
+                            ),
                           ),
                         );
                       }
-                      final balance = balanceSnapshot.data ?? widget.tenant.rentThreshold;
+                      final balance =
+                          balanceSnapshot.data ?? widget.tenant.rentThreshold;
 
                       return Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -326,13 +348,17 @@ class _PaymentScreenState extends State<PaymentScreen> {
                                       ? 'Paid in full'
                                       : 'Balance: ${_currencyFormat.format(balance)} UGX',
                                   style: TextStyle(
-                                    color: balance <= 0 ? Colors.white : Colors.black87,
+                                    color:
+                                        balance <= 0
+                                            ? Colors.white
+                                            : Colors.black87,
                                     fontFamily: 'Poppins',
                                   ),
                                 ),
-                                backgroundColor: balance <= 0
-                                    ? Colors.green
-                                    : accentYellow.withOpacity(0.5),
+                                backgroundColor:
+                                    balance <= 0
+                                        ? Colors.green
+                                        : accentYellow.withOpacity(0.5),
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(16.0),
                                 ),
@@ -352,88 +378,91 @@ class _PaymentScreenState extends State<PaymentScreen> {
                               ),
                             )
                           else
-                            ...payments.map((payment) => Card(
-                                  elevation: 4.0,
-                                  shape: RoundedRectangleBorder(
+                            ...payments.map(
+                              (payment) => Card(
+                                elevation: 4.0,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12.0),
+                                ),
+                                margin: const EdgeInsets.only(bottom: 12.0),
+                                child: Container(
+                                  decoration: BoxDecoration(
                                     borderRadius: BorderRadius.circular(12.0),
-                                  ),
-                                  margin: const EdgeInsets.only(bottom: 12.0),
-                                  child: Container(
-                                    decoration: BoxDecoration(
-                                      borderRadius: BorderRadius.circular(12.0),
-                                      gradient: LinearGradient(
-                                        colors: [
-                                          Colors.grey[100]!,
-                                          Colors.white,
-                                        ],
-                                        begin: Alignment.topLeft,
-                                        end: Alignment.bottomRight,
-                                      ),
+                                    gradient: LinearGradient(
+                                      colors: [Colors.grey[100]!, Colors.white],
+                                      begin: Alignment.topLeft,
+                                      end: Alignment.bottomRight,
                                     ),
-                                    child: ListTile(
-                                      contentPadding: const EdgeInsets.symmetric(
-                                          horizontal: 16.0, vertical: 8.0),
-                                      subtitle: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          Row(
-                                            children: [
-                                              Icon(
-                                                Icons.monetization_on,
-                                                color: primaryBlue,
-                                                size: 20,
-                                              ),
-                                              const SizedBox(width: 8),
-                                              Text(
-                                                'Rent: ${_currencyFormat.format(payment.rentPaid)} UGX',
-                                                style: const TextStyle(
-                                                  fontSize: 16,
-                                                  fontWeight: FontWeight.w600,
-                                                  fontFamily: 'Poppins',
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                          const SizedBox(height: 4),
-                                          Row(
-                                            children: [
-                                              Icon(
-                                                Icons.water_drop,
-                                                color: accentYellow,
-                                                size: 20,
-                                              ),
-                                              const SizedBox(width: 8),
-                                              Text(
-                                                'Water: ${_currencyFormat.format(payment.waterBillPaid)} UGX',
-                                                style: const TextStyle(
-                                                  fontSize: 16,
-                                                  fontWeight: FontWeight.w600,
-                                                  fontFamily: 'Poppins',
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                          const SizedBox(height: 4),
-                                          Text(
-                                            _dateFormat.format(payment.createdAt),
-                                            style: TextStyle(
-                                              fontSize: 14,
-                                              color: Colors.grey[600],
-                                              fontFamily: 'Poppins',
+                                  ),
+                                  child: ListTile(
+                                    contentPadding: const EdgeInsets.symmetric(
+                                      horizontal: 16.0,
+                                      vertical: 8.0,
+                                    ),
+                                    subtitle: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Row(
+                                          children: [
+                                            Icon(
+                                              Icons.monetization_on,
+                                              color: primaryBlue,
+                                              size: 20,
                                             ),
-                                          ),
-                                        ],
-                                      ),
-                                      trailing: IconButton(
-                                        icon: const Icon(
-                                          Icons.delete,
-                                          color: Colors.red,
+                                            const SizedBox(width: 8),
+                                            Text(
+                                              'Rent: ${_currencyFormat.format(payment.rentPaid)} UGX',
+                                              style: const TextStyle(
+                                                fontSize: 16,
+                                                fontWeight: FontWeight.w600,
+                                                fontFamily: 'Poppins',
+                                              ),
+                                            ),
+                                          ],
                                         ),
-                                        onPressed: () => _deletePayment(payment.id!),
+                                        const SizedBox(height: 4),
+                                        Row(
+                                          children: [
+                                            Icon(
+                                              Icons.water_drop,
+                                              color: accentYellow,
+                                              size: 20,
+                                            ),
+                                            const SizedBox(width: 8),
+                                            Text(
+                                              'Water: ${_currencyFormat.format(payment.waterBillPaid)} UGX',
+                                              style: const TextStyle(
+                                                fontSize: 16,
+                                                fontWeight: FontWeight.w600,
+                                                fontFamily: 'Poppins',
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          _dateFormat.format(payment.createdAt),
+                                          style: TextStyle(
+                                            fontSize: 14,
+                                            color: Colors.grey[600],
+                                            fontFamily: 'Poppins',
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    trailing: IconButton(
+                                      icon: const Icon(
+                                        Icons.delete,
+                                        color: Colors.red,
                                       ),
+                                      onPressed:
+                                          () => _deletePayment(payment.id!),
                                     ),
                                   ),
-                                )),
+                                ),
+                              ),
+                            ),
                         ],
                       );
                     },
@@ -478,8 +507,12 @@ class _PaymentScreenState extends State<PaymentScreen> {
       final payment = Payment(
         tenantId: widget.tenant.id!,
         date: selectedDate,
-        rentPaid: double.parse(_rentController.text.replaceAll(RegExp(r'[^0-9.]'), '')),
-        waterBillPaid: double.parse(_waterController.text.replaceAll(RegExp(r'[^0-9.]'), '')),
+        rentPaid: double.parse(
+          _rentController.text.replaceAll(RegExp(r'[^0-9.]'), ''),
+        ),
+        waterBillPaid: double.parse(
+          _waterController.text.replaceAll(RegExp(r'[^0-9.]'), ''),
+        ),
       );
 
       final paymentId = await _dbService.addPayment(payment);
@@ -488,10 +521,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
         SnackBar(
           content: const Text(
             'Payment recorded successfully!',
-            style: TextStyle(
-              color: Colors.white,
-              fontFamily: 'Poppins',
-            ),
+            style: TextStyle(color: Colors.white, fontFamily: 'Poppins'),
           ),
           backgroundColor: const Color(0xFF1E88E5),
           behavior: SnackBarBehavior.floating,
@@ -502,10 +532,11 @@ class _PaymentScreenState extends State<PaymentScreen> {
       Navigator.push(
         context,
         MaterialPageRoute(
-          builder: (context) => ReceiptScreen(
-            payment: payment.copyWith(id: paymentId),
-            tenant: widget.tenant,
-          ),
+          builder:
+              (context) => ReceiptScreen(
+                payment: payment.copyWith(id: paymentId),
+                tenant: widget.tenant,
+              ),
         ),
       );
 
@@ -535,48 +566,43 @@ class _PaymentScreenState extends State<PaymentScreen> {
   Future<void> _deletePayment(String paymentId) async {
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16.0),
-        ),
-        title: const Text(
-          'Delete Payment?',
-          style: TextStyle(
-            fontFamily: 'Poppins',
-            fontWeight: FontWeight.bold,
-            color: Color(0xFF1E88E5),
-          ),
-        ),
-        content: const Text(
-          'This action cannot be undone',
-          style: TextStyle(
-            fontFamily: 'Poppins',
-            fontSize: 16,
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text(
-              'Cancel',
+      builder:
+          (context) => AlertDialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16.0),
+            ),
+            title: const Text(
+              'Delete Payment?',
               style: TextStyle(
                 fontFamily: 'Poppins',
-                color: Color(0xFFFFCA28),
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF1E88E5),
               ),
             ),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text(
-              'Delete',
-              style: TextStyle(
-                fontFamily: 'Poppins',
-                color: Colors.red,
-              ),
+            content: const Text(
+              'This action cannot be undone',
+              style: TextStyle(fontFamily: 'Poppins', fontSize: 16),
             ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text(
+                  'Cancel',
+                  style: TextStyle(
+                    fontFamily: 'Poppins',
+                    color: Color(0xFFFFCA28),
+                  ),
+                ),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text(
+                  'Delete',
+                  style: TextStyle(fontFamily: 'Poppins', color: Colors.red),
+                ),
+              ),
+            ],
           ),
-        ],
-      ),
     );
 
     if (confirmed == true) {
@@ -585,10 +611,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
         SnackBar(
           content: const Text(
             'Payment deleted',
-            style: TextStyle(
-              color: Colors.white,
-              fontFamily: 'Poppins',
-            ),
+            style: TextStyle(color: Colors.white, fontFamily: 'Poppins'),
           ),
           backgroundColor: const Color(0xFF1E88E5),
           behavior: SnackBarBehavior.floating,
@@ -635,11 +658,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
               shape: BoxShape.circle,
               color: Colors.white.withOpacity(0.2),
             ),
-            child: Icon(
-              icon,
-              color: Colors.white,
-              size: 28,
-            ),
+            child: Icon(icon, color: Colors.white, size: 28),
           ),
         ),
       ),
