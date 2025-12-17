@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <!--
+    If you are serving your web app in a path other than the root, change the
+    href value below to reflect the base path you are serving from.
+
+    The path provided below has to start and end with a slash "/" in order for
+    it to work correctly.
+
+    For more details:
+    * https://developer.mozilla.org/en-US/docs/Web/HTML/Element/base
+
+    This is a placeholder for base href that will be replaced by the value of
+    the `--base-href` argument provided to `flutter build`.
+  -->
+  <base href="$FLUTTER_BASE_HREF">
+
+  <meta charset="UTF-8">
+  <meta content="IE=Edge" http-equiv="X-UA-Compatible">
+  <meta name="description" content="A new Flutter project.">
+
+  <!-- iOS meta tags & icons -->
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="apple-mobile-web-app-title" content="rental_management_app">
+  <link rel="apple-touch-icon" href="assets.png">
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/png" href="assets.png" />
+
+  <title>rental_management_app</title>
+  <link rel="manifest" href="manifest.json">
+</head>
+<script src="https://www.gstatic.com/firebasejs/9.6.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.6.0/firebase-firestore-compat.js"></script>
+<script>
+  const firebaseConfig = {
+    apiKey: "AIzaSyAmSSMCH8YfFkrLdM7g3AaZw9rdOz6IzGY",
+    authDomain: "rental-management-app-b0b7d.firebaseapp.com",
+    projectId: "rental-management-app-b0b7d",
+    storageBucket: "rental-management-app-b0b7d.firebasestorage.app",
+    messagingSenderId: "280061620898",
+    appId: "1:280061620898:web:bd1c798c2492e6d6ab5dfb"
+  };
+  firebase.initializeApp(firebaseConfig);
+</script>
+
+<body>
+  <script src="flutter_bootstrap.js" async></script>
+</body>
+
+</html>
